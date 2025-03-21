@@ -1,0 +1,17 @@
+html, body {
+  margin: 0;
+  padding: 0;
+}
+canvas {
+  display: block;
+}
+
+input, button {
+  background-color: red;
+  color: black;
+  border: none;   
+  font-size: 16px; 
+  padding: 5px 10px; 
+}
+
+
