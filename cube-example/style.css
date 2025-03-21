@@ -1,0 +1,92 @@
+/* 全屏黑色背景 */
+body {
+  margin: 0;
+  overflow: hidden;
+  background-color: black;
+  font-family: sans-serif;
+}
+/* 右上角的加号按钮 */
+#plus {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  font-size: 30px;
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  z-index: 10;
+}
+/* 悬停提示文字 */
+#cubeLabel {
+  position: absolute;
+  color: white;
+  background: rgba(0,0,0,0.6);
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  font-size: 14px;
+  display: none;
+  white-space: nowrap;
+  z-index: 9999;
+}
+/* 个人资料卡片 */
+#profileCard {
+  position: absolute;
+  display: none;
+  width: 300px;
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 0 20px 5px rgba(255,255,255,0.8); /* 发光效果 */
+  border-radius: 10px;
+  padding: 20px;
+  color: #000;
+  z-index: 9999;
+}
+#profileCard img {
+  width: 100%;
+  height: auto;
+  border-radius: 5px;
+  margin-bottom: 10px;
+}
+#profileCard p {
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+/* 居中弹出的表单对话框 */
+#uploadModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255,255,255,0.95);
+  box-shadow: 0 0 20px 5px rgba(255,255,255,0.8);
+  border-radius: 10px;
+  padding: 20px;
+  width: 300px;
+  display: none; /* 初始隐藏 */
+  z-index: 9999;
+  color: #000;
+}
+#uploadModal h2 {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+#uploadModal label {
+  display: block;
+  margin: 10px 0 5px 0;
+  font-weight: bold;
+}
+#uploadModal input[type="text"],
+#uploadModal textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+#uploadModal input[type="file"] {
+  width: 100%;
+}
+#uploadModal button {
+  margin-top: 10px;
+  padding: 8px 16px;
+  cursor: pointer;
+}
