@@ -1,3 +1,4 @@
 #Maelyn IMA random tries
 
-[alternate_chat](alternate_chat)
+[stupid_timer](https://Maelynnnn.github.io/IMA-non-courses-tries/stupid_timer/index.html)
+
