@@ -25,7 +25,7 @@ function preload() {
 function setup() {
   createCanvas(windowWidth, windowHeight);
   size = width/7;
-  textFont('Outfit');
+  textFont('Comic Relief');
   textSize(size);
   textAlign(CENTER,CENTER);
   imageMode(CENTER);

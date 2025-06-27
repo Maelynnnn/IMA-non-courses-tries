@@ -21,7 +21,7 @@ function setup() {
   size = width / 6;
   textSize(size);
   textAlign(CENTER, CENTER);
-  textFont("Outfit");
+  textFont("Comic Relief");
   stopMusic.setLoop(false);
   mjY = 1.5 * height;
   bgColor = color(240);
