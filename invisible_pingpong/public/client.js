@@ -57,6 +57,10 @@ let alignOK = false, steadyMs = 0, lastTs = performance.now();
 let bothReady = false;
 let clockOffset = 0; // 本地对服务器时间偏移
 
+let serveArmed = false;        // 是否在“等待发球挥拍”的待机状态
+const SERVE_TIMEOUT = 5000;    // 点按钮后 3 秒内有效
+
+
 // —— 大厅 ——
 joinBtn.onclick = async () => {
   roomId = (roomInp.value || '').trim();
@@ -214,6 +218,34 @@ const ai = e.accelerationIncludingGravity || {};
 acc.x = lp(acc.x, ai.x||0); acc.y = lp(acc.y, ai.y||0); acc.z = lp(acc.z, ai.z||0);
 }, { capture:true });
 
+  // 在每次 devicemotion 后尝试“消费一次挥拍事件”
+  const swing = detectSwing();
+  if (swing) {
+    // 1) 如果点了“开始发球”，就用这次挥拍来发球
+    if (serveArmed && !activeBall) {
+      performServe(swing);
+      return;
+    }
+    // 2) 如果正处于接球命中窗口，就用挥拍来回击
+    if (activeBall) {
+      const now = Date.now();
+      const { startAt, tFlight, xTarget } = activeBall;
+      const HIT_WIN = 250;
+      if (now >= startAt && now <= startAt + tFlight + HIT_WIN) {
+        const inPos = Math.abs(getXNorm() - xTarget) < 0.12;
+        if (inPos) {
+          const next = swingToTarget(swing);
+          const nstart = Date.now() + clockOffset + 150;
+          activeBall = { xTarget: next.x_target, startAt: nstart, tFlight: next.t_flight };
+          statusEl.textContent = '回击成功 → 对方';
+          socket.emit('hit', { x_target: next.x_target, t_flight: next.t_flight, startAt: nstart });
+        }
+      }
+    }
+  }
+
+  
+
 
 function detectSwing(){
 const now = performance.now();
@@ -280,17 +312,32 @@ serveBtn.disabled = isHost; // 失误后由对方发球
 }
 }
 
-// 交互：发球/回击
-serveBtn.onclick = ()=>{
-const s = detectSwing();
-if (!s){ statusEl.textContent='请挥拍发球'; return; }
-const { x_target, t_flight } = swingToTarget(s);
-const startAt = Date.now() + clockOffset + 200; // 预留 200ms
-activeBall = { xTarget: x_target, startAt, tFlight: t_flight };
-statusEl.textContent = '发球 → 对方';
-socket.emit('serve', { x_target, t_flight, startAt });
-serveBtn.disabled = true;
+function performServe(s) {
+  const { x_target, t_flight } = swingToTarget(s);
+  const startAt = Date.now() + clockOffset + 200; // 预留 200ms
+  activeBall = { xTarget: x_target, startAt, tFlight: t_flight };
+  statusEl.textContent = '发球 → 对方';
+  socket.emit('serve', { x_target, t_flight, startAt });
+  serveBtn.disabled = true;
+  serveArmed = false;
+}
+
+
+
+serveBtn.onclick = () => {
+  // 进入“待机等挥拍”状态
+  serveArmed = true;
+  statusEl.textContent = '请在 3 秒内挥拍发球…';
+
+  // 3 秒后还没挥拍则取消
+  setTimeout(() => {
+    if (serveArmed) {
+      serveArmed = false;
+      statusEl.textContent = '未检测到挥拍，请重试';
+    }
+  }, SERVE_TIMEOUT);
 };
+
 
 
 // 回击：在目标窗口内再次挥拍
