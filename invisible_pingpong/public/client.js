@@ -218,15 +218,26 @@ const ai = e.accelerationIncludingGravity || {};
 acc.x = lp(acc.x, ai.x||0); acc.y = lp(acc.y, ai.y||0); acc.z = lp(acc.z, ai.z||0);
 }, { capture:true });
 
-  // 在每次 devicemotion 后尝试“消费一次挥拍事件”
+
+
+
+
+window.addEventListener('devicemotion', (e) => {
+  const rr = e.rotationRate || {};
+  const rx = (rr.alpha||0)*Math.PI/180, ry=(rr.beta||0)*Math.PI/180, rz=(rr.gamma||0)*Math.PI/180;
+  ang.x = lp(ang.x, rx); ang.y = lp(ang.y, ry); ang.z = lp(ang.z, rz);
+  const ai = e.accelerationIncludingGravity || {};
+  acc.x = lp(acc.x, ai.x||0); acc.y = lp(acc.y, ai.y||0); acc.z = lp(acc.z, ai.z||0);
+
+  // ✅ 每帧devicemotion里再尝试“消费一次挥拍”
   const swing = detectSwing();
   if (swing) {
-    // 1) 如果点了“开始发球”，就用这次挥拍来发球
+    // 发球：点了“开始发球”后第一次挥拍
     if (serveArmed && !activeBall) {
       performServe(swing);
       return;
     }
-    // 2) 如果正处于接球命中窗口，就用挥拍来回击
+    // 回击：命中窗口内 + 已到位
     if (activeBall) {
       const now = Date.now();
       const { startAt, tFlight, xTarget } = activeBall;
@@ -243,23 +254,8 @@ acc.x = lp(acc.x, ai.x||0); acc.y = lp(acc.y, ai.y||0); acc.z = lp(acc.z, ai.z||
       }
     }
   }
+}, { capture: true });
 
-  
-
-
-function detectSwing(){
-const now = performance.now();
-const speed = Math.hypot(ang.x,ang.y,ang.z);
-const accel = Math.hypot(acc.x,acc.y,acc.z);
-if (now - lastSwing < 250) return null;
-if (speed > 4.5 && accel > 10){
-lastSwing = now;
-const dir = Math.sign(ang.z || ang.y || 1);
-const mag = Math.min(speed/10,1);
-return {dir,mag,t:now};
-}
-return null;
-}
 
 
 function swingToTarget(s){
