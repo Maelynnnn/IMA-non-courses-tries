@@ -211,31 +211,40 @@ bothReady = true; socket.emit('ready');
 }
 
 // —— 挥拍检测（更宽松 & 去重力）——
-
-
-
-
-
-
+let ang = { x:0, y:0, z:0 };
+let acc = { x:0, y:0, z:0 };
+let lastSwing = 0;
 
 window.addEventListener('devicemotion', (e) => {
+  // 角速度（deg/s→rad/s）+ 轻微低通
   const rr = e.rotationRate || {};
-  const rx = (rr.alpha||0)*Math.PI/180, ry=(rr.beta||0)*Math.PI/180, rz=(rr.gamma||0)*Math.PI/180;
-  ang.x = lp(ang.x, rx); ang.y = lp(ang.y, ry); ang.z = lp(ang.z, rz);
-  const ai = e.accelerationIncludingGravity || {};
-  acc.x = lp(acc.x, ai.x||0); acc.y = lp(acc.y, ai.y||0); acc.z = lp(acc.z, ai.z||0);
+  const rx = (rr.alpha || 0) * Math.PI/180;
+  const ry = (rr.beta  || 0) * Math.PI/180;
+  const rz = (rr.gamma || 0) * Math.PI/180;
+  ang.x = lp(ang.x, rx, 0.35);
+  ang.y = lp(ang.y, ry, 0.35);
+  ang.z = lp(ang.z, rz, 0.35);
 
+  // 加速度：优先用不含重力；否则用含重力并减去 g
+  const a = e.acceleration || e.accelerationIncludingGravity || {};
+  let ax = a.x || 0, ay = a.y || 0, az = a.z || 0;
+  acc.x = lp(acc.x, ax, 0.3);
+  acc.y = lp(acc.y, ay, 0.3);
+  acc.z = lp(acc.z, az, 0.3);
 
+  // 去重力后的模长
+  let amag = Math.hypot(ax, ay, az);
+  if (!e.acceleration) amag = Math.max(0, amag - 9.81);
 
-  // ✅ 每帧devicemotion里再尝试“消费一次挥拍”
-  const swing = detectSwing();
+  // —— 每帧尝试“消费一次挥拍” —— //
+  const swing = detectSwing(amag);
   if (swing) {
-    // 发球：点了“开始发球”后第一次挥拍
-    if (serveArmed && !activeBall) {
-      performServe(swing);
-      return;
-    }
-    // 回击：命中窗口内 + 已到位
+    navigator.vibrate?.(20); // 触觉提示
+
+    // 点了“开始发球” → 用这次挥拍真正发球
+    if (serveArmed && !activeBall) { performServe(swing); return; }
+
+    // 命中窗口内且到位 → 回击
     if (activeBall) {
       const now = Date.now();
       const { startAt, tFlight, xTarget } = activeBall;
@@ -254,7 +263,7 @@ window.addEventListener('devicemotion', (e) => {
   }
 }, { capture: true });
 
-function detectSwing(amag = 0){
+function detectSwing(amag = 0) {
   const now = performance.now();
   const speed = Math.hypot(ang.x, ang.y, ang.z); // rad/s
 
@@ -266,9 +275,10 @@ function detectSwing(amag = 0){
   lastSwing = now;
   // 用 z/y 中幅度更大的分量决定方向
   const dir = Math.sign(Math.abs(ang.z) > Math.abs(ang.y) ? ang.z : ang.y) || 1;
-  const mag = Math.max(0.2, Math.min(1, speed / 8));  // 给最小幅度
+  const mag = Math.max(0.2, Math.min(1, speed / 8)); // 给最小幅度
   return { dir, mag, t: now };
 }
+
 
 
 
