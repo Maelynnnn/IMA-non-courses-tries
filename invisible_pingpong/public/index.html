@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Invisible PingPong</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<main>
+<h1>Invisible PingPong <span id="hostBadge" class="badge" hidden>Host</span></h1>
+
+
+<!-- 大厅 -->
+<section id="lobby">
+<label>房间号（自定义 4~6 位，如 7788）：
+<input id="room" maxlength="8" placeholder="输入房间号" />
+</label>
+<button id="joinBtn">加入/创建房间</button>
+<div id="lobbyInfo"></div>
+<p>两人进入同一房间即可开始。建议使用同向站立模式，成功率最高。</p>
+</section>
+
+
+<!-- 权限 -->
+<section id="perm" hidden>
+<h3>权限</h3>
+<button id="motionBtn">启用体感权限</button>
+<button id="cameraBtn" disabled>（可选）启用相机/标记追踪</button>
+<p>iOS 需要 HTTPS + 点击授权。</p>
+</section>
+
+
+<!-- 校准 -->
+<section id="calib" hidden>
+<h3>校准：请水平对齐 <span id="modeHint" class="badge">同向</span></h3>
+<div id="canvas">
+<div id="line"></div>
+<!-- 可选：预留视频画面位置，用于后续 Tag/AR 模块 -->
+</div>
+<div>
+<button id="toggleMode">切换 面对面/同向</button>
+<button id="readyBtn" disabled>保持稳定以准备</button>
+<div id="calibHint"></div>
+</div>
+</section>
+
+
+<!-- 对战 -->
+<section id="play" hidden>
+<h3>对战</h3>
+<div id="canvas" class="play">
+<div id="target"></div>
+<div id="paddle"></div>
+</div>
+<div>
+<button id="serveBtn" disabled>开始发球</button>
+<button id="centerBtn">居中校正</button>
+<span id="status"></span>
+</div>
+</section>
+
+
+<section>
+<details>
+<summary>日志 / 调试</summary>
+<div id="log"></div>
+</details>
+</section>
+</main>
+
+
+<script type="module" src="./utils.js"></script>
+<script type="module" src="./net.js"></script>
+<script type="module" src="./tracker.inertial.js"></script>
+<script type="module" src="./client.js"></script>
+</body>
+</html>
