@@ -10,7 +10,7 @@
 <main>
 <h1>Invisible PingPong <span id="hostBadge" class="badge" hidden>Host</span></h1>
 
-
+<script src="/socket.io/socket.io.js"></script>
 <!-- 大厅 -->
 <section id="lobby">
 <label>房间号（自定义 4~6 位，如 7788）：
@@ -79,9 +79,11 @@
 </main>
 
 
+<script src="/socket.io/socket.io.js"></script>
 <script type="module" src="./utils.js"></script>
 <script type="module" src="./net.js"></script>
 <script type="module" src="./tracker.inertial.js"></script>
 <script type="module" src="./client.js"></script>
+
 </body>
 </html>
