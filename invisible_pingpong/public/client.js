@@ -60,6 +60,9 @@ let clockOffset = 0; // 本地对服务器时间偏移
 let serveArmed = false;        // 是否在“等待发球挥拍”的待机状态
 const SERVE_TIMEOUT = 5000;    // 点按钮后 3 秒内有效
 
+// —— 对战动画/命中 ——
+let activeBall = null; // {xTarget, startAt, tFlight}
+
 
 // —— 大厅 ——
 joinBtn.onclick = async () => {
@@ -207,16 +210,9 @@ bothReady = true; socket.emit('ready');
 }
 }
 
-// —— 挥拍检测 ——
-let ang = {x:0,y:0,z:0}, acc={x:0,y:0,z:0}, lastSwing=0;
-window.addEventListener('devicemotion', (e)=>{
-const rr = e.rotationRate || {};
-// deg/s -> rad/s
-const rx = (rr.alpha||0)*Math.PI/180, ry=(rr.beta||0)*Math.PI/180, rz=(rr.gamma||0)*Math.PI/180;
-ang.x = lp(ang.x, rx); ang.y=lp(ang.y, ry); ang.z=lp(ang.z, rz);
-const ai = e.accelerationIncludingGravity || {};
-acc.x = lp(acc.x, ai.x||0); acc.y = lp(acc.y, ai.y||0); acc.z = lp(acc.z, ai.z||0);
-}, { capture:true });
+// —— 挥拍检测（更宽松 & 去重力）——
+
+
 
 
 
@@ -228,6 +224,8 @@ window.addEventListener('devicemotion', (e) => {
   ang.x = lp(ang.x, rx); ang.y = lp(ang.y, ry); ang.z = lp(ang.z, rz);
   const ai = e.accelerationIncludingGravity || {};
   acc.x = lp(acc.x, ai.x||0); acc.y = lp(acc.y, ai.y||0); acc.z = lp(acc.z, ai.z||0);
+
+
 
   // ✅ 每帧devicemotion里再尝试“消费一次挥拍”
   const swing = detectSwing();
@@ -256,6 +254,23 @@ window.addEventListener('devicemotion', (e) => {
   }
 }, { capture: true });
 
+function detectSwing(amag = 0){
+  const now = performance.now();
+  const speed = Math.hypot(ang.x, ang.y, ang.z); // rad/s
+
+  // 满足其一即可：角速度或（去重力后）线加速度达到阈值
+  const hit = (speed > 2.2) || (amag > 3.0);
+  if (!hit) return null;
+  if (now - lastSwing < 200) return null;  // 去抖
+
+  lastSwing = now;
+  // 用 z/y 中幅度更大的分量决定方向
+  const dir = Math.sign(Math.abs(ang.z) > Math.abs(ang.y) ? ang.z : ang.y) || 1;
+  const mag = Math.max(0.2, Math.min(1, speed / 8));  // 给最小幅度
+  return { dir, mag, t: now };
+}
+
+
 
 
 function swingToTarget(s){
@@ -266,8 +281,6 @@ const t_flight = 500 + Math.round((1 - s.mag)*120);
 return { x_target, t_flight };
 }
 
-// —— 对战动画/命中 ——
-let activeBall = null; // {xTarget, startAt, tFlight}
 
 
 function playTick(){
