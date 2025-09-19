@@ -10,6 +10,14 @@ const perm = $('#perm');
 const calib = $('#calib');
 const play = $('#play');
 
+// —— DOM ——（在原来的基础上补3个）
+const waiting   = document.querySelector('#waiting');
+const roomLabel = document.querySelector('#roomLabel');
+const permEarlyBtn = document.querySelector('#permEarlyBtn');
+
+let motionGranted = false; // 是否已获得体感权限
+
+
 
 const joinBtn = $('#joinBtn');
 const roomInp = $('#room');
@@ -51,40 +59,78 @@ let clockOffset = 0; // 本地对服务器时间偏移
 
 // —— 大厅 ——
 joinBtn.onclick = async () => {
-roomId = (roomInp.value || '').trim();
-if (!roomId) { alert('请输入房间号'); return; }
-const info = await joinRoom(roomId);
-hostId = info?.host || null;
-isHost = socket.id === hostId;
-hostBadge.hidden = !isHost;
-lobbyInfo.textContent = `房间人数：${info?.count||1}`;
-lobby.hidden = true; perm.hidden = false; state = 'perm';
+  roomId = (roomInp.value || '').trim();
+  if (!roomId) { alert('请输入房间号'); return; }
+  const info = await joinRoom(roomId);
+
+  hostId = info?.host || null;
+  isHost = socket.id === hostId;
+  hostBadge.hidden = !isHost;
+
+  roomLabel.textContent = roomId;
+
+  // 根据人数决定显示什么
+  if ((info?.count || 1) === 1) {
+    // 第一位进入者 → 等待页
+    lobby.hidden = true;
+    waiting.hidden = true; // 先隐藏一下避免闪烁
+    waiting.hidden = false;
+    state = 'waiting';
+  } else {
+    // 房间里已经有 1 人，你是第 2 人 → 跳到校准（若未授权则先到权限页）
+    lobby.hidden = true;
+    if (!motionGranted) {
+      perm.hidden = false; state = 'perm';
+    } else {
+      calib.hidden = false; state = 'calib';
+    }
+  }
 };
+
+
+
+async function enableMotion() {
+  try {
+    if (typeof DeviceMotionEvent?.requestPermission === 'function') {
+      const st1 = await DeviceMotionEvent.requestPermission();
+      if (st1 !== 'granted') throw new Error('未授权 DeviceMotion');
+    }
+    if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+      const st2 = await DeviceOrientationEvent.requestPermission();
+      if (st2 !== 'granted') throw new Error('未授权 DeviceOrientation');
+    }
+  } catch (e) {
+    alert(e.message || e);
+    return false;
+  }
+  // 启动追踪与监听（保持你原来的逻辑）
+  startInertial();
+  window.addEventListener('deviceorientation', (e) => {
+    if (typeof e.alpha === 'number') { yaw = e.alpha; socket.emit('yaw', yaw); }
+    if (typeof e.gamma === 'number') { roll = e.gamma; }
+  }, true);
+  motionGranted = true;
+  return true;
+}
+
 
 
 // —— 权限 ——
-motionBtn.onclick = async ()=>{
-try{
-if (typeof DeviceMotionEvent?.requestPermission === 'function'){
-const st = await DeviceMotionEvent.requestPermission();
-if (st !== 'granted') throw new Error('未授权 DeviceMotion');
-}
-if (typeof DeviceOrientationEvent?.requestPermission === 'function'){
-const st2 = await DeviceOrientationEvent.requestPermission();
-if (st2 !== 'granted') throw new Error('未授权 DeviceOrientation');
-}
-}catch(e){ alert(e.message||e); return; }
-// 启动惯性追踪
-startInertial();
-// 方向监听（为校准与“同向/面对面”判断）
-window.addEventListener('deviceorientation', (e)=>{
-if (typeof e.alpha === 'number') { yaw = e.alpha; socket.emit('yaw', yaw); }
-if (typeof e.gamma === 'number') { roll = e.gamma; }
-}, true);
-
-
-perm.hidden = true; calib.hidden = false; state = 'calib';
+motionBtn.onclick = async () => {
+  const ok = await enableMotion();
+  if (!ok) return;
+  // 从“权限页”进入校准页
+  perm.hidden = true;
+  calib.hidden = false;
+  state = 'calib';
 };
+
+permEarlyBtn.onclick = async () => {
+  await enableMotion();
+  // 仍然停留在等待页，等第二个人加入后会自动跳到校准
+};
+
+
 
 // —— 校准 ——
 toggleMode.onclick = ()=>{
@@ -94,10 +140,25 @@ modeHint.textContent = needFaceToFace ? '面对面' : '同向';
 
 
 socket.on('peer-yaw', (y) => { peerYaw = y; });
-socket.on('room-info', (info)=>{
-lobbyInfo.textContent = `房间人数：${info.count}`;
-hostId = info.host; isHost = socket.id === hostId; hostBadge.hidden = !isHost;
+socket.on('room-info', (info) => {
+  lobbyInfo.textContent = `房间人数：${info.count}`;
+  hostId = info.host; isHost = socket.id === hostId; hostBadge.hidden = !isHost;
+
+  // 如果我在“等待页”，且人数变为 2 → 进入校准（未授权则先到权限页）
+  if (state === 'waiting' && info.count === 2) {
+    waiting.hidden = true;
+    if (!motionGranted) {
+      perm.hidden = false; state = 'perm';
+    } else {
+      calib.hidden = false; state = 'calib';
+    }
+  }
+
+  // 反向处理：如果在校准/对局阶段对方断线（count 回到 1），你也可以选择退回等待
+  // 简版可先不处理；需要的话加：
+  // if ((state==='calib'||state==='play') && info.count===1) { play.hidden=true; calib.hidden=true; waiting.hidden=false; state='waiting'; }
 });
+
 
 
 socket.on('both-ready', async ({host})=>{
