@@ -2,6 +2,13 @@ import { clamp, lp, degDiff, sleep } from './utils.js';
 import { socket, joinRoom, syncTime } from './net.js';
 import { startInertial, getXNorm, center, getRoll } from './tracker.inertial.js';
 
+let serverIsMe = false;        // 当前是否轮到“我”发球
+const PREP_DELAY = 450;        // 发球/回击前的准备延时（毫秒）
+const HIT_WIN    = 700;        // 命中窗口（毫秒）
+const POS_TOL    = 0.18;       // 位置容差（0~1 归一化）
+const FLIGHT_MS_BASE    = 1000;// 飞行基础时长
+const FLIGHT_MS_VARIANT = 350;
+
 
 // —— DOM ——
 const $ = (s)=>document.querySelector(s);
@@ -169,14 +176,21 @@ socket.on('room-info', (info) => {
 
 
 socket.on('both-ready', async ({host})=>{
-hostId = host; isHost = socket.id === hostId; hostBadge.hidden = !isHost;
-bothReady = true;
-// 对时
-clockOffset = await syncTime();
-calib.hidden = true; play.hidden = false; state = 'play';
-statusEl.textContent = isHost ? '你是发球方' : '等待对方发球';
-serveBtn.disabled = !isHost;
+  hostId = host; isHost = socket.id === hostId; hostBadge.hidden = !isHost;
+  bothReady = true;
+  clockOffset = await syncTime();
+  calib.hidden = true; play.hidden = false; state = 'play';
+
+  serverIsMe = isHost;                // 开局由 host 发
+  renderServeBtn();
+  statusEl.textContent = serverIsMe ? '你是发球方' : '等待对方发球';
 });
+
+function renderServeBtn(){
+  // 只有轮到你发球、且当前没有在飞的球，按钮才可用
+  serveBtn.disabled = !serverIsMe || !!activeBall || state !== 'play';
+}
+
 
 
 readyBtn.onclick = ()=>{ /* 仅做展示；实际由稳定计时自动触发 */ };
@@ -284,12 +298,13 @@ function detectSwing(amag = 0) {
 
 
 function swingToTarget(s){
-const k = 0.55;
-let cur = getXNorm();
-let x_target = clamp(cur + k * s.dir * s.mag, -1, 1);
-const t_flight = 500 + Math.round((1 - s.mag)*120);
-return { x_target, t_flight };
+  const k = 0.55;
+  const cur = getXNorm();
+  const x_target = clamp(cur + k * s.dir * s.mag, -1, 1);
+  const t_flight = FLIGHT_MS_BASE + Math.round((1 - s.mag) * FLIGHT_MS_VARIANT);
+  return { x_target, t_flight };
 }
+
 
 
 
@@ -310,13 +325,23 @@ else if (t < tFlight){
 // 可在此加入小球动画；目标圈放到底部固定位置
 const tx = (xTarget*0.5 + 0.5) * (W - targetEl.clientWidth);
 targetEl.style.left = `${tx}px`;
+
+// 简单纵向下落动画：从上侧 15% 掉到下侧 85%
+const C = document.querySelector('#canvas.play');
+const H = C.clientHeight;
+const y = Math.min(1, Math.max(0, t / tFlight));       // 0→1
+const topPx = Math.round((0.15 + 0.70 * y) * (H - targetEl.clientHeight));
+targetEl.style.top = `${topPx}px`;
+
 } else {
 // 到达命中瞬间：开启命中窗口 250ms
 const HIT_WIN = 250;
 const now = Date.now();
-const inPos = Math.abs(getXNorm() - xTarget) < 0.12;
+// const inPos = Math.abs(getXNorm() - xTarget) < 0.12;
 const canSwing = true; // 由按钮或再次挥拍触发
 
+// 命中判定时
+const inPos = Math.abs(getXNorm() - xTarget) < POS_TOL;
 
 if (now - startAt <= tFlight + HIT_WIN){
 // 等待玩家挥拍回击
@@ -325,7 +350,7 @@ if (now - startAt <= tFlight + HIT_WIN){
 statusEl.textContent = '接球失败';
 socket.emit('miss', { reason:'timeout' });
 activeBall = null;
-serveBtn.disabled = isHost; // 失误后由对方发球
+//serveBtn.disabled = isHost; // 失误后由对方发球
 }
 }
 }
@@ -333,20 +358,21 @@ serveBtn.disabled = isHost; // 失误后由对方发球
 
 function performServe(s) {
   const { x_target, t_flight } = swingToTarget(s);
-  const startAt = Date.now() + clockOffset + 200; // 预留 200ms
+  const startAt = Date.now() + clockOffset + PREP_DELAY; // 预留准备时间
   activeBall = { xTarget: x_target, startAt, tFlight: t_flight };
   statusEl.textContent = '发球 → 对方';
   socket.emit('serve', { x_target, t_flight, startAt });
-  serveBtn.disabled = true;
   serveArmed = false;
+  renderServeBtn();
 }
+
 
 
 
 serveBtn.onclick = () => {
   // 进入“待机等挥拍”状态
   serveArmed = true;
-  statusEl.textContent = '请在 3 秒内挥拍发球…';
+  statusEl.textContent = '请在 5 秒内挥拍发球…';
 
   // 3 秒后还没挥拍则取消
   setTimeout(() => {
@@ -386,11 +412,13 @@ centerBtn.onclick = ()=>{ center(); };
 
 // 接收网络事件
 socket.on('serve', ({ x_target, t_flight, startAt })=>{
-targetEl.style.display='block';
-activeBall = { xTarget: x_target, startAt, tFlight: t_flight };
-statusEl.textContent = '对方发球 → 你的回合';
-serveBtn.disabled = true;
+  serverIsMe = false;                          // 对方在发
+  renderServeBtn();
+  targetEl.style.display = 'block';
+  activeBall = { xTarget: x_target, startAt, tFlight: t_flight };
+  statusEl.textContent = '对方发球 → 你的回合';
 });
+
 
 
 socket.on('hit', ({ x_target, t_flight, startAt })=>{
@@ -401,10 +429,14 @@ statusEl.textContent = '对方回击 → 你的回合';
 
 
 socket.on('miss', ({ reason })=>{
-statusEl.textContent = '对方失误，你发球';
-activeBall = null;
-serveBtn.disabled = !isHost;
+  activeBall = null;
+  // 失误后交换发球权
+  serverIsMe = !serverIsMe;
+  renderServeBtn();
+  statusEl.textContent = serverIsMe ? '对方失误，轮到你发球' : '你这一分失误，等待对方发球';
+  targetEl.style.display = 'none';
 });
+
 
 // 主循环
 function loop(){
